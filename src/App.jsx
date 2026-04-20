@@ -67,8 +67,9 @@ const HOSPITAL_ROLES = {
   6: [
     { key:"IR",          label:"IR",         icon:"🩺", row:0 },
     { key:"Resident",    label:"Resident",   icon:"🙃", row:0 },
-    { key:"Technologist",label:"IR Tech",    icon:"🔧", row:1 },
-    { key:"RN",          label:"RN",         icon:"🩹", row:1 },
+    { key:"Technologist",label:"IR Tech",    icon:"🔧", row:1, weekendOnly:true },
+    { key:"RN",          label:"RN",         icon:"🩹", row:1, weekendOnly:true },
+    { key:"RadFrontDesk",label:"Radiology Front Desk", icon:"📞", row:1, static:true, phone:"404-686-5998", note:"Call to find out the on-call RN and IR Tech" },
     { key:"CTTech",      label:"CT Tech",    icon:"🖥️", row:2, static:true, phone:"" },
     { key:"Anesthesia",  label:"Anesthesia", icon:"💉", row:2, static:true, phone:"", note:"Check on EHConnect for on-call anesthesiologist", link:"https://ehconnect.eushc.org/", linkLabel:"Open EHConnect" },
   ],
