@@ -1,10 +1,8 @@
-const CACHE = "iroc-v5";
-
+const CACHE = "iroc-v6";
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/"])));
   self.skipWaiting();
 });
-
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -12,7 +10,6 @@ self.addEventListener("activate", (e) => {
     ).then(() => self.clients.claim())
   );
 });
-
 self.addEventListener("fetch", (e) => {
   if (e.request.url.includes("googleapis.com") || e.request.url.includes("google.com")) {
     e.respondWith(fetch(e.request).catch(() => new Response("", { status: 503 })));

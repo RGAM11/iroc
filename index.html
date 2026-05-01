@@ -19,14 +19,11 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        // Unregister any old/broken service workers first
         navigator.serviceWorker.getRegistrations().then(regs => {
           regs.forEach(r => r.unregister());
         }).then(() => {
-          // Re-register fresh
           navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(reg => {
             reg.update();
-            console.log('SW registered:', reg.scope);
           });
         });
       });
