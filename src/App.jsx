@@ -97,11 +97,15 @@ const parseCSVRows = (text) => {
   });
 };
 const getDataRows = (allRows) => {
-  const hi = allRows.findIndex(r => r[0] === "HOSP");
+  const hi = allRows.findIndex(r => r[0] && r[0].trim() === "HOSP");
   if (hi === -1) return [];
-  return allRows.slice(hi + 2).filter(r => r[0] && r[0].trim() !== "");
+  // Try hi+1 first — if it looks like data (starts with a hospital name), use it
+  // Otherwise skip one sub-header row (hi+2)
+  const nextRow = allRows[hi + 1];
+  const skip = (nextRow && HOSP_ID[nextRow[0]?.trim()]) ? 1 : 2;
+  return allRows.slice(hi + skip).filter(r => r[0] && r[0].trim() !== "");
 };
-const c = (r, i) => (r[i] || "").trim();
+const c = (r, i) => (r[i] || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
 
 // EUH-EHH-EDH: 28 cols. IH RN cols 6-11, IH Tech cols 18-21 (weekend only)
 const parseEUHTab = (text, data) => {
@@ -155,7 +159,8 @@ const parseEUHTab = (text, data) => {
 
 const parseMidTab = (text, data) => {
   getDataRows(parseCSVRows(text)).forEach(r => {
-    const id = HOSP_ID[c(r,0)]; const day = c(r,1);
+    const rawHosp = c(r,0).replace("MTWEM","MT/WEM");
+    const id = HOSP_ID[rawHosp]; const day = c(r,1);
     if (!id || !day || !data[id]) return;
     const isWE = day === "Saturday" || day === "Sunday";
     data[id].IR[day] = { name:c(r,2), phone:c(r,3), time: isWE ? "All Day" : "5:00 PM – 7:00 AM" };
