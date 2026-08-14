@@ -3,11 +3,17 @@ import EditMode from "./Edit";
 
 // ═══════════════════════════════════════════════════════════════
 // MAINTENANCE MODE
-// Set MAINTENANCE to true to take IROC offline and show the notice.
-// Set it back to false (and rebuild/push) to bring the app back.
+// Set MAINTENANCE to true to take IROC offline immediately, or set
+// MAINTENANCE_START to a date/time to take it offline automatically
+// at that moment (Eastern time). To bring the app back: set
+// MAINTENANCE to false AND MAINTENANCE_START to null, then push.
 // ═══════════════════════════════════════════════════════════════
-const MAINTENANCE = false;
+const MAINTENANCE = true;
+const MAINTENANCE_START = new Date("2026-08-14T07:00:00-04:00"); // Aug 14, 2026, 7:00 AM ET
 const MAINTENANCE_MESSAGE = "IROC is temporarily paused. Please follow the on-call emails in the meantime.";
+
+const isMaintenanceNow = () =>
+  MAINTENANCE || (MAINTENANCE_START && Date.now() >= MAINTENANCE_START.getTime());
 
 const BASE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSz1MLm6ZSF1hSKaxr6bdDrO98npeCxLhrkaxcdsKytZgAIPE80wCs1o0ot5ATTPcjTuf3wRfgs1VVM/pub";
 const CSV_TABS = {
@@ -520,7 +526,15 @@ function MaintenanceScreen() {
 }
 
 export default function App() {
-  if (MAINTENANCE) return <MaintenanceScreen />;
+  const [down, setDown] = useState(isMaintenanceNow());
+  // Re-check every 30s so an app that's already open flips to the
+  // maintenance screen when the start time passes.
+  useEffect(() => {
+    if (down) return;
+    const t = setInterval(() => { if (isMaintenanceNow()) setDown(true); }, 30000);
+    return () => clearInterval(t);
+  }, [down]);
+  if (down) return <MaintenanceScreen />;
   return <MainApp />;
 }
 
