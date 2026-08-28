@@ -8,8 +8,8 @@ import EditMode from "./Edit";
 // at that moment (Eastern time). To bring the app back: set
 // MAINTENANCE to false AND MAINTENANCE_START to null, then push.
 // ═══════════════════════════════════════════════════════════════
-const MAINTENANCE = true;
-const MAINTENANCE_START = new Date("2026-08-14T07:00:00-04:00"); // Aug 14, 2026, 7:00 AM ET
+const MAINTENANCE = false;
+const MAINTENANCE_START = null;
 const MAINTENANCE_MESSAGE = "IROC is temporarily paused. Please follow the on-call emails in the meantime.";
 
 const isMaintenanceNow = () =>
