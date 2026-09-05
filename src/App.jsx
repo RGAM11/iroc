@@ -15,6 +15,44 @@ const MAINTENANCE_MESSAGE = "IROC is temporarily paused. Please follow the on-ca
 const isMaintenanceNow = () =>
   MAINTENANCE || (MAINTENANCE_START && Date.now() >= MAINTENANCE_START.getTime());
 
+// ── Dynamic maintenance via Apps Script ──────────────────────────────────────
+// The admin can toggle this from the Edit Mode screen without a code push.
+// State is stored in the Apps Script's ScriptProperties and read via JSONP.
+const DYN_MAINT_KEY = "iroc_dyn_maint";
+const DYN_MAINT_TTL = 120000; // 2 min cache
+
+const getDynMaintCache = () => {
+  try {
+    const c = JSON.parse(localStorage.getItem(DYN_MAINT_KEY) || "{}");
+    return c;
+  } catch (e) { return {}; }
+};
+
+const checkDynamicMaint = (setDown) => {
+  const cache = getDynMaintCache();
+  // Use cached value immediately if fresh
+  if (cache.on && Date.now() - cache.ts < DYN_MAINT_TTL) { setDown(true); return; }
+
+  // JSONP fetch to bypass CORS — Apps Script must handle mode=get_maintenance
+  const cb = "irocMC" + Date.now();
+  const script = document.createElement("script");
+  const timer = setTimeout(() => {
+    try { delete window[cb]; } catch (e) {}
+    if (script.parentNode) script.parentNode.removeChild(script);
+  }, 10000);
+  window[cb] = (d) => {
+    clearTimeout(timer);
+    try { delete window[cb]; } catch (e) {}
+    if (script.parentNode) script.parentNode.removeChild(script);
+    const on = !!(d && d.ok && d.maintenance);
+    try { localStorage.setItem(DYN_MAINT_KEY, JSON.stringify({on, ts: Date.now()})); } catch (e) {}
+    if (on) setDown(true);
+  };
+  script.onerror = () => { clearTimeout(timer); try { delete window[cb]; } catch (e) {} };
+  script.src = `${SUGGESTION_ENDPOINT}?mode=get_maintenance&callback=${cb}&_=${Date.now()}`;
+  document.body.appendChild(script);
+};
+
 const BASE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSz1MLm6ZSF1hSKaxr6bdDrO98npeCxLhrkaxcdsKytZgAIPE80wCs1o0ot5ATTPcjTuf3wRfgs1VVM/pub";
 const CSV_TABS = {
   euh:      `${BASE}?gid=775592937&single=true&output=csv`,
@@ -526,14 +564,28 @@ function MaintenanceScreen() {
 }
 
 export default function App() {
-  const [down, setDown] = useState(isMaintenanceNow());
-  // Re-check every 30s so an app that's already open flips to the
-  // maintenance screen when the start time passes.
+  const [down, setDown] = useState(() => {
+    if (isMaintenanceNow()) return true;
+    // Apply cached dynamic maintenance immediately (before JSONP returns)
+    const c = getDynMaintCache();
+    return !!(c.on && Date.now() - c.ts < DYN_MAINT_TTL);
+  });
+
+  // Re-check every 30s so an open app flips when the start time passes.
   useEffect(() => {
     if (down) return;
     const t = setInterval(() => { if (isMaintenanceNow()) setDown(true); }, 30000);
     return () => clearInterval(t);
   }, [down]);
+
+  // Check dynamic maintenance from Apps Script every 2 min
+  useEffect(() => {
+    if (MAINTENANCE || down) return;
+    checkDynamicMaint(setDown);
+    const t = setInterval(() => checkDynamicMaint(setDown), DYN_MAINT_TTL);
+    return () => clearInterval(t);
+  }, []);
+
   if (down) return <MaintenanceScreen />;
   return <MainApp />;
 }
