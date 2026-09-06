@@ -244,6 +244,13 @@ const parseOtherNumbers = (rows, data, id) => {
   if (nums.length) data[id]._extraNumbers = nums;
 };
 
+// Shared-tab Other Numbers: Edit Mode tags entries "HOSP|Label" so paired
+// hospitals keep separate lists; untagged entries are legacy, shown for both.
+const NUM_TAG = /^(EHH|EDH|ESJH|EJCH)\|/;
+const numsFor = (nums, k) => nums
+  .filter(n => { const m = NUM_TAG.exec(n.label || ""); return !m || m[1] === k; })
+  .map(n => ({ ...n, label: (n.label || "").replace(NUM_TAG, "") }));
+
 // ─── EUH tab (stacked tables, anchor-based) ───
 const parseEUHTab = (text, data) => {
   const rows = parseCSVRows(text); const id = 1; if (!data[id]) return;
@@ -328,7 +335,9 @@ const parseEHHEDHTab = (text, data) => {
   if (bi>=0) for (let r=bi+1;r<Math.min(bi+3,rows.length);r++){ const t=c(rows[r],0); if(t&&!t.toUpperCase().includes("SPECIAL INSTRUCTIONS") && !t.toUpperCase().includes("ANNOUNCEMENT")){banner=t;break;} }
   const oNums = []; const oi = findAnchor(rows, "OTHER NUMBERS");
   if (oi>=0) for (let r=oi+2;r<rows.length;r++){ const nm=c(rows[r],0),ph=c(rows[r],1); if(nm&&nm.toUpperCase()!=="NAME") oNums.push({label:nm,phone:ph}); }
-  [2,3].forEach(hid => { if(data[hid]){ if(banner) data[hid]._banner=banner; if(oNums.length) data[hid]._extraNumbers=oNums; }});
+  const ehhedhKeys = {2:"EHH", 3:"EDH"};
+  [2,3].forEach(hid => { if(data[hid]){ if(banner) data[hid]._banner=banner;
+    const mine = numsFor(oNums, ehhedhKeys[hid]); if(mine.length) data[hid]._extraNumbers=mine; }});
   // Schedule rows: read by hospital name in col 0
   getDataRows(rows).forEach(r => {
     const id = HOSP_ID[c(r,0)]; const day = c(r,1);
@@ -369,7 +378,9 @@ const parseESJHEJCHTab = (text, data) => {
   if(bi>=0) for(let r=bi+1;r<Math.min(bi+3,rows.length);r++){const t=c(rows[r],0); if(t&&!t.toUpperCase().includes("SPECIAL INSTRUCTIONS") && !t.toUpperCase().includes("ANNOUNCEMENT")){banner=t;break;}}
   const oNums=[]; const oi=findAnchor(rows,"OTHER NUMBERS");
   if(oi>=0) for(let r=oi+2;r<rows.length;r++){const nm=c(rows[r],0),ph=c(rows[r],1); if(nm&&nm.toUpperCase()!=="NAME") oNums.push({label:nm,phone:ph});}
-  [4,5].forEach(hid=>{if(data[hid]){if(banner)data[hid]._banner=banner; if(oNums.length)data[hid]._extraNumbers=oNums;}});
+  const esjhejchKeys = {4:"ESJH", 5:"EJCH"};
+  [4,5].forEach(hid=>{if(data[hid]){if(banner)data[hid]._banner=banner;
+    const mine = numsFor(oNums, esjhejchKeys[hid]); if(mine.length) data[hid]._extraNumbers=mine;}});
   getDataRows(rows).forEach(r => {
     const id=HOSP_ID[c(r,0)]; const day=c(r,1);
     if((id!==4&&id!==5)||!DAYS.includes(day)||!data[id]) return;
@@ -825,7 +836,7 @@ function MainApp() {
             </div>
 
             <div style={{ textAlign:"center", marginTop:"14px", fontSize:"9px", color:T.textMuted, letterSpacing:"1px" }}>
-              IROC v10.7.2
+              IROC v10.8.0
             </div>
 
             <div style={{ height:"30px" }} />

@@ -82,6 +82,17 @@ const HOSPS = [
 ];
 const TABKEY = { "EUH":"EUH", "EHH-EDH":"EHHEDH", "MTWEM":"MTWEM", "ESJH-EJCH":"ESJHEJCH", "GMH":"GMH" };
 
+// Tabs where two hospitals share one sheet: their Other Numbers live in a
+// single section, so each entry is tagged "HOSP|Label" to keep the lists
+// separate. Untagged entries are legacy and show for both hospitals.
+const SHARED_TABS = { "ESJH-EJCH":true, "EHH-EDH":true };
+const NUM_TAG = /^(EHH|EDH|ESJH|EJCH)\|/;
+const numsForHosp = (all, k) => (all || [])
+  .filter(n => { const m = NUM_TAG.exec(n.label || ""); return !m || m[1] === k; })
+  .map(n => ({ ...n, label: (n.label || "").replace(NUM_TAG, "") }));
+const numsKeepOthers = (all, k) => (all || [])
+  .filter(n => { const m = NUM_TAG.exec(n.label || ""); return m && m[1] !== k; });
+
 // ═══ Hoisted to module scope. Defining these INSIDE the parent makes React
 // ═══ treat them as new component types on every keystroke, which remounts
 // ═══ the input and steals focus after one character.
@@ -269,10 +280,11 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
   const loadForm = (h) => {
     const d = data[h.k] || {};
     const tk = TABKEY[h.tab];
+    const allNums = (data.otherNumbers && data.otherNumbers[tk]) || [];
     return JSON.parse(JSON.stringify({
       ...d,
       banner: (data.banners && data.banners[tk]) || "",
-      otherNumbers: (data.otherNumbers && data.otherNumbers[tk]) || [],
+      otherNumbers: SHARED_TABS[h.tab] ? numsForHosp(allNums, h.k) : allNums,
     }));
   };
   const openHosp = (h) => { setForm(loadForm(h)); setHosp(h); setStep("hosp"); setSavedAt(""); setErr(""); };
@@ -287,9 +299,31 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
   const saveHosp = async () => {
     setBusy(true); setErr("");
     try {
+      const tk = TABKEY[hosp.tab];
+      const { banner, otherNumbers, ...rest } = form;
+      // In a shared tab the sheet holds ONE Other Numbers section for the
+      // pair, so tag this hospital's entries and carry the other hospital's
+      // tagged entries through untouched.
+      const tabNums = SHARED_TABS[hosp.tab]
+        ? [ ...numsKeepOthers((data.otherNumbers && data.otherNumbers[tk]) || [], hosp.k),
+            ...(otherNumbers || []).filter(n => (n.label || n.phone))
+              .map(n => ({ ...n, label: `${hosp.k}|${n.label || ""}` })) ]
+        : (otherNumbers || []);
       const r = await postJson(endpoint, { mode:"save", code:clean(),
-        hospital: hosp.k, fields: form });
-      if (r && r.ok) setSavedAt(new Date().toLocaleTimeString());
+        hospital: hosp.k, fields: { ...rest, banner, otherNumbers: tabNums } });
+      if (r && r.ok) {
+        setSavedAt(new Date().toLocaleTimeString());
+        // Write the save back into the login-time snapshot, otherwise
+        // re-opening this hospital rebuilds the form from stale data and the
+        // just-saved names appear to revert.
+        setData(d => {
+          const n = JSON.parse(JSON.stringify(d));
+          n[hosp.k] = JSON.parse(JSON.stringify(rest));
+          n.banners = { ...(n.banners || {}), [tk]: banner || "" };
+          n.otherNumbers = { ...(n.otherNumbers || {}), [tk]: JSON.parse(JSON.stringify(tabNums)) };
+          return n;
+        });
+      }
       else setErr((r && r.error) || "Save failed.");
     } catch (e) { setErr("Save failed: " + e.message); }
     setBusy(false);
