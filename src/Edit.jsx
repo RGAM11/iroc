@@ -358,7 +358,7 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
               {maintOn === null
                 ? "Checking status…"
                 : (maintOn
-                  ? "IROC shows "Temporarily Paused" to all users."
+                  ? 'IROC shows “Temporarily Paused” to all users.'
                   : "IROC is available to all users.")}
             </div>
             {maintOn !== null && (
