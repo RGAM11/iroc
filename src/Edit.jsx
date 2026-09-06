@@ -207,6 +207,10 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
   const [staff, setStaff]     = useState(null);
   const [savedAt, setSavedAt] = useState("");
   const [open, setOpen]       = useState({ ann:true, a:true });
+  const [adminCode, setAdminCode] = useState("");
+  const [maintOn, setMaintOn]     = useState(null);  // null=loading, true/false=known
+  const [maintBusy, setMaintBusy] = useState(false);
+  const [maintErr, setMaintErr]   = useState("");
 
   const S = mk(T, dk);
   const page = { position:"fixed", inset:0, zIndex:900, background:T.bg,
@@ -234,9 +238,28 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
           : ((d && d.error) || "Could not read the sheet."));
         setBusy(false); return;
       }
-      setData(d.data); setStaff(d.data.staff); setStep("list");
+      setData(d.data); setStaff(d.data.staff); setAdminCode(c); setStep("list");
+      // Fetch maintenance state in background after login
+      jsonp(endpoint, { mode: "get_maintenance" })
+        .then(r => setMaintOn(!!(r && r.ok && r.maintenance)))
+        .catch(() => setMaintOn(null));
     } catch (e) { setErr("Could not reach the script: " + e.message); }
     setBusy(false);
+  };
+
+  const toggleMaint = async () => {
+    setMaintBusy(true); setMaintErr("");
+    const newVal = !maintOn;
+    try {
+      const d = await jsonp(endpoint, { mode: "set_maintenance", value: newVal ? "true" : "false", code: adminCode });
+      if (d && d.ok) {
+        setMaintOn(!!d.maintenance);
+        try { localStorage.setItem("iroc_dyn_maint", JSON.stringify({on:!!d.maintenance, ts:Date.now()})); } catch(e) {}
+      } else {
+        setMaintErr((d && d.error) || "Could not toggle — check Apps Script is updated.");
+      }
+    } catch (e) { setMaintErr("Could not reach Apps Script: " + e.message); }
+    setMaintBusy(false);
   };
 
   const names = (k) => (staff?.[k] || []).map(x=>x.name).filter(Boolean);
@@ -321,6 +344,41 @@ export default function EditMode({ endpoint, T, dk, onClose }) {
         <button style={hbtn} onClick={()=>{ setStep("staff"); setSavedAt(""); setErr(""); }}>👥 Staff</button>
       </div>
       <div style={body}>
+
+        {/* ── App Status toggle ── */}
+        <div style={{ marginBottom:"14px", padding:"14px", borderRadius:"12px",
+          background: maintOn ? (dk?"#2A1010":"#FFF0F0") : (dk?"#0F1F14":"#F0FBF4"),
+          border:`2px solid ${maintOn ? "#C0392B" : "#2A9D5A"}` }}>
+          <div style={{ fontSize:"10px", fontWeight:800, letterSpacing:"1px", textTransform:"uppercase",
+            color: maintOn ? "#E07070" : "#2A9D5A", marginBottom:"8px" }}>
+            {maintOn ? "🔴 App Suspended" : "🟢 App Live"}
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+            <div style={{ flex:1, fontSize:"13px", color:T.textSub, lineHeight:1.4 }}>
+              {maintOn === null
+                ? "Checking status…"
+                : (maintOn
+                  ? 'IROC shows “Temporarily Paused” to all users.'
+                  : "IROC is available to all users.")}
+            </div>
+            {maintOn !== null && (
+              <div onClick={!maintBusy ? toggleMaint : undefined}
+                style={{ padding:"10px 16px", borderRadius:"8px", fontWeight:700, fontSize:"13px",
+                  cursor: maintBusy ? "default" : "pointer",
+                  background: maintOn ? "#2A9D5A" : "#C0392B",
+                  color:"#fff", opacity: maintBusy ? 0.6 : 1, whiteSpace:"nowrap" }}>
+                {maintBusy ? "…" : (maintOn ? "Restore" : "Suspend")}
+              </div>
+            )}
+          </div>
+          {maintErr && <div style={{ fontSize:"11px", color:"#C0392B", marginTop:"6px" }}>{maintErr}</div>}
+          {maintOn === null && !maintErr && (
+            <div style={{ fontSize:"11px", color:T.textMuted, marginTop:"4px" }}>
+              ℹ️ Needs Apps Script update to enable — tap "Suspend" to set up.
+            </div>
+          )}
+        </div>
+
         <div style={{ fontSize:"10px", fontWeight:800, letterSpacing:"1px", color:T.textMuted,
           textTransform:"uppercase", margin:"6px 0 10px" }}>Tap a site to edit</div>
         {HOSPS.map(h => {
